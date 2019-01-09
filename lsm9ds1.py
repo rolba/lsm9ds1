@@ -3,7 +3,8 @@ try:
     import struct
 except ImportError:
     import ustruct as struct
-    
+
+import RPi.GPIO as GPIO 
 from smbus2 import SMBus
 
 # Internal ants and register values:
@@ -12,17 +13,17 @@ _LSM9DS1_ADDRESS_ACCELGYRO       = int(0x6B)
 _LSM9DS1_ADDRESS_MAG             = int(0x1E)
 _LSM9DS1_XG_ID                   = (0b01101000)
 _LSM9DS1_MAG_ID                  = (0b00111101)
-_LSM9DS1_ACCEL_MG_LSB_2G         = 0.061
-_LSM9DS1_ACCEL_MG_LSB_4G         = 0.122
-_LSM9DS1_ACCEL_MG_LSB_8G         = 0.244
-_LSM9DS1_ACCEL_MG_LSB_16G        = 0.732
+_LSM9DS1accel_mg_lsb_2G         = 0.061
+_LSM9DS1accel_mg_lsb_4G         = 0.122
+_LSM9DS1accel_mg_lsb_8G         = 0.244
+_LSM9DS1accel_mg_lsb_16G        = 0.732
 _LSM9DS1_MAG_MGAUSS_4GAUSS       = 0.14
 _LSM9DS1_MAG_MGAUSS_8GAUSS       = 0.29
 _LSM9DS1_MAG_MGAUSS_12GAUSS      = 0.43
 _LSM9DS1_MAG_MGAUSS_16GAUSS      = 0.58
-_LSM9DS1_GYRO_DPS_DIGIT_245DPS   = 0.00875
-_LSM9DS1_GYRO_DPS_DIGIT_500DPS   = 0.01750
-_LSM9DS1_GYRO_DPS_DIGIT_2000DPS  = 0.07000
+_LSM9DS1gyro_dps_digit_245DPS   = 0.00875
+_LSM9DS1gyro_dps_digit_500DPS   = 0.01750
+_LSM9DS1gyro_dps_digit_2000DPS  = 0.07000
 _LSM9DS1_TEMP_LSB_DEGREE_CELSIUS = 8 # 1°C = 8, 25° = 200, etc.
 _LSM9DS1_REGISTER_WHO_AM_I_XG    = (0x0F)
 _LSM9DS1_REGISTER_CTRL_REG1_G    = (0x10)
@@ -86,7 +87,7 @@ GYROSCALE_2000DPS            = (0b11 << 3)  # +/- 2000 degrees/s rotation
 
 
 
-class LSM9DS1:
+class LSM9DS1(object):
     """Driver for the LSM9DS1 accelerometer, magnetometer, gyroscope."""
 
     # Class-level buffer for reading and writing data with the sensor.
@@ -101,8 +102,7 @@ class LSM9DS1:
         self._write_u8(_MAGTYPE, _LSM9DS1_REGISTER_CTRL_REG2_M, 0x0C)
         time.sleep(0.01)
         # Check ID registers.
-        if self._read_u8(_XGTYPE, _LSM9DS1_REGISTER_WHO_AM_I_XG) != _LSM9DS1_XG_ID or \
-           self._read_u8(_MAGTYPE, _LSM9DS1_REGISTER_WHO_AM_I_M) != _LSM9DS1_MAG_ID:
+        if self._read_u8(_XGTYPE, _LSM9DS1_REGISTER_WHO_AM_I_XG) != _LSM9DS1_XG_ID or self._read_u8(_MAGTYPE, _LSM9DS1_REGISTER_WHO_AM_I_M) != _LSM9DS1_MAG_ID:
             raise RuntimeError('Could not find LSM9DS1, check wiring!')
         # enable gyro continuous
         self._write_u8(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG1_G, 0xC0) # on XYZ
@@ -112,14 +112,13 @@ class LSM9DS1:
         # enable mag continuous
         self._write_u8(_MAGTYPE, _LSM9DS1_REGISTER_CTRL_REG3_M, 0x00)
         # Set default ranges for the various sensors
-        self._accel_mg_lsb = None
-        self._mag_mgauss_lsb = None
-        self._gyro_dps_digit = None
+        self.accel_mg_lsb = None
+        self.mag_mgauss_lsb = None
+        self.gyro_dps_digit = None
         self.accel_range = ACCELRANGE_2G
         self.mag_gain = MAGGAIN_4GAUSS
         self.gyro_scale = GYROSCALE_245DPS
 
-    @property
     def accel_range(self):
         """The accelerometer range.  Must be a value of:
           - ACCELRANGE_2G
@@ -130,7 +129,6 @@ class LSM9DS1:
         reg = self._read_u8(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG6_XL)
         return (reg & 0b00011000) & 0xFF
 
-    @accel_range.setter
     def accel_range(self, val):
         assert val in (ACCELRANGE_2G, ACCELRANGE_4G, ACCELRANGE_8G,
                        ACCELRANGE_16G)
@@ -139,15 +137,14 @@ class LSM9DS1:
         reg |= val
         self._write_u8(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG6_XL, reg)
         if val == ACCELRANGE_2G:
-            self._accel_mg_lsb = _LSM9DS1_ACCEL_MG_LSB_2G
+            self.accel_mg_lsb = _LSM9DS1accel_mg_lsb_2G
         elif val == ACCELRANGE_4G:
-            self._accel_mg_lsb = _LSM9DS1_ACCEL_MG_LSB_4G
+            self.accel_mg_lsb = _LSM9DS1accel_mg_lsb_4G
         elif val == ACCELRANGE_8G:
-            self._accel_mg_lsb = _LSM9DS1_ACCEL_MG_LSB_8G
+            self.accel_mg_lsb = _LSM9DS1accel_mg_lsb_8G
         elif val == ACCELRANGE_16G:
-            self._accel_mg_lsb = _LSM9DS1_ACCEL_MG_LSB_16G
+            self.accel_mg_lsb = _LSM9DS1accel_mg_lsb_16G
 
-    @property
     def mag_gain(self):
         """The magnetometer gain.  Must be a value of:
           - MAGGAIN_4GAUSS
@@ -158,7 +155,6 @@ class LSM9DS1:
         reg = self._read_u8(_MAGTYPE, _LSM9DS1_REGISTER_CTRL_REG2_M)
         return (reg & 0b01100000) & 0xFF
 
-    @mag_gain.setter
     def mag_gain(self, val):
         assert val in (MAGGAIN_4GAUSS, MAGGAIN_8GAUSS, MAGGAIN_12GAUSS,
                        MAGGAIN_16GAUSS)
@@ -167,15 +163,14 @@ class LSM9DS1:
         reg |= val
         self._write_u8(_MAGTYPE, _LSM9DS1_REGISTER_CTRL_REG2_M, reg)
         if val == MAGGAIN_4GAUSS:
-            self._mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_4GAUSS
+            self.mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_4GAUSS
         elif val == MAGGAIN_8GAUSS:
-            self._mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_8GAUSS
+            self.mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_8GAUSS
         elif val == MAGGAIN_12GAUSS:
-            self._mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_12GAUSS
+            self.mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_12GAUSS
         elif val == MAGGAIN_16GAUSS:
-            self._mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_16GAUSS
+            self.mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_16GAUSS
 
-    @property
     def gyro_scale(self):
         """The gyroscope scale.  Must be a value of:
           - GYROSCALE_245DPS
@@ -185,7 +180,6 @@ class LSM9DS1:
         reg = self._read_u8(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG1_G)
         return (reg & 0b00011000) & 0xFF
 
-    @gyro_scale.setter
     def gyro_scale(self, val):
         assert val in (GYROSCALE_245DPS, GYROSCALE_500DPS, GYROSCALE_2000DPS)
         reg = self._read_u8(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG1_G)
@@ -193,11 +187,11 @@ class LSM9DS1:
         reg |= val
         self._write_u8(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG1_G, reg)
         if val == GYROSCALE_245DPS:
-            self._gyro_dps_digit = _LSM9DS1_GYRO_DPS_DIGIT_245DPS
+            self.gyro_dps_digit = _LSM9DS1gyro_dps_digit_245DPS
         elif val == GYROSCALE_500DPS:
-            self._gyro_dps_digit = _LSM9DS1_GYRO_DPS_DIGIT_500DPS
+            self.gyro_dps_digit = _LSM9DS1gyro_dps_digit_500DPS
         elif val == GYROSCALE_2000DPS:
-            self._gyro_dps_digit = _LSM9DS1_GYRO_DPS_DIGIT_2000DPS
+            self.gyro_dps_digit = _LSM9DS1gyro_dps_digit_2000DPS
 
     def read_accel_raw(self):
         """Read the raw accelerometer sensor values and return it as a
@@ -211,13 +205,12 @@ class LSM9DS1:
         raw_x, raw_y, raw_z = struct.unpack_from('<hhh', self._BUFFER[0:6])
         return (raw_x, raw_y, raw_z)
 
-    @property
     def acceleration(self):
         """The accelerometer X, Y, Z axis values as a 3-tuple of
         m/s^2 values.
         """
         raw = self.read_accel_raw()
-        return map(lambda x: x * self._accel_mg_lsb / 1000.0 * _SENSORS_GRAVITY_STANDARD,
+        return map(lambda x: x * self.accel_mg_lsb / 1000.0 * _SENSORS_GRAVITY_STANDARD,
                    raw)
 
     def read_mag_raw(self):
@@ -232,13 +225,12 @@ class LSM9DS1:
         raw_x, raw_y, raw_z = struct.unpack_from('<hhh', self._BUFFER[0:6])
         return (raw_x, raw_y, raw_z)
 
-    @property
     def magnetic(self):
         """The magnetometer X, Y, Z axis values as a 3-tuple of
         gauss values.
         """
         raw = self.read_mag_raw()
-        return map(lambda x: x * self._mag_mgauss_lsb / 1000.0, raw)
+        return map(lambda x: x * self.mag_mgauss_lsb / 1000.0, raw)
 
     def read_gyro_raw(self):
         """Read the raw gyroscope sensor values and return it as a
@@ -252,13 +244,12 @@ class LSM9DS1:
         raw_x, raw_y, raw_z = struct.unpack_from('<hhh', self._BUFFER[0:6])
         return (raw_x, raw_y, raw_z)
 
-    @property
     def gyro(self):
         """The gyroscope X, Y, Z axis values as a 3-tuple of
         degrees/second values.
         """
         raw = self.read_gyro_raw()
-        return map(lambda x: x * self._gyro_dps_digit, raw)
+        return map(lambda x: x * self.gyro_dps_digit, raw)
 
     def read_temp_raw(self):
         """Read the raw temperature sensor value and return it as a 12-bit
@@ -271,7 +262,6 @@ class LSM9DS1:
         temp = ((self._BUFFER[1] << 8) | self._BUFFER[0]) >> 4
         return _twos_comp(temp, 12)
 
-    @property
     def temperature(self):
         """The temperature of the sensor in degrees Celsius."""
         # This is just a guess since the starting point (21C here) isn't documented :(
@@ -308,15 +298,17 @@ class I2C_Device():
         self._deviceAddress = deviceAddress
         self._bus = SMBus(busNumber)
 
-    def read_bytes(self, buf, length):
-        buf = self._bus.read_i2c_block_data(self._deviceAddress, buf[0], length)
+
     
     def read_byte(self, register):
         return self._bus.read_byte_data(self._deviceAddress, register)
+
+    def read_bytes(self, buf, length):
+        buf = self._bus.read_i2c_block_data(self._deviceAddress, buf[0], length)
     
-    def write_byte(self, register):
-        return self._bus.read_byte_data(self._deviceAddress, register)
-    
+    def write_byte(self, register, value):
+        return self._bus.write_byte_data(self._deviceAddress, register, value)
+   
     def close_bus(self):
         self._bus.close()
 
@@ -327,17 +319,18 @@ class LSM9DS1_I2C(LSM9DS1):
     def __init__(self, i2cBusId):
         self._mag_device = I2C_Device(i2cBusId, _LSM9DS1_ADDRESS_MAG)
         self._xg_device = I2C_Device(i2cBusId, _LSM9DS1_ADDRESS_ACCELGYRO)
-#         super().__init__()
+        super().__init__()
 
     def _read_u8(self, sensor_type, address):
         if sensor_type == _MAGTYPE:
             device = self._mag_device
         else:
             device = self._xg_device
-        with device as i2c:
-            self._BUFFER[0] = address & 0xFF
-            i2c.write(self._BUFFER, end=1, stop=False)
-            i2c.readinto(self._BUFFER, end=1)
+
+        self._BUFFER[0] = address & 0xFF
+
+        device.read_byte(self._BUFFER[0])
+        
         return self._BUFFER[0]
 
     def _read_bytes(self, sensor_type, address, count, buf):
@@ -355,18 +348,27 @@ class LSM9DS1_I2C(LSM9DS1):
             device = self._mag_device
         else:
             device = self._xg_device
-        with device as i2c:
-            self._BUFFER[0] = address & 0xFF
-            self._BUFFER[1] = val & 0xFF
-            i2c.write(self._BUFFER, end=2)
+        self._BUFFER[0] = address & 0xFF
+        self._BUFFER[1] = val & 0xFF
+        device.write_byte(self._BUFFER[0], self._BUFFER[1])
     
-    
+
+csag = 17
+csn = 18
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(csag, GPIO.OUT)
+GPIO.setup(csn, GPIO.OUT)
+
+GPIO.output(csag, GPIO.HIGH)
+GPIO.output(csag, GPIO.HIGH)
+
 x = LSM9DS1_I2C(1)
 
 # Read acceleration, magnetometer, gyroscope, temperature.
 # accel_x, accel_y, accel_z = x.acceleration
 # mag_x, mag_y, mag_z = x.magnetic
-gyro_x, gyro_y, gyro_z = x.gyro
+gyro_x, gyro_y, gyro_z = x.gyro()
 # temp = x.temperature
 # Print values.
 # print('Acceleration (m/s^2): ({0:0.3f},{1:0.3f},{2:0.3f})'.format(accel_x, accel_y, accel_z))
