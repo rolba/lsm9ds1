@@ -153,6 +153,33 @@ class LSM9DS1():
         elif val == ACCELRANGE_16G:
             self._accel_mg_lsb = _LSM9DS1_ACCEL_MG_LSB_16G
     
+    @property
+    def mag_gain(self):
+        """The magnetometer gain.  Must be a value of:
+          - MAGGAIN_4GAUSS
+          - MAGGAIN_8GAUSS
+          - MAGGAIN_12GAUSS
+          - MAGGAIN_16GAUSS
+        """
+        reg = self._read_byte(_MAGTYPE, _LSM9DS1_REGISTER_CTRL_REG2_M)
+        return (reg & 0b01100000) & 0xFF
+
+    @mag_gain.setter
+    def mag_gain(self, val):
+        assert val in (MAGGAIN_4GAUSS, MAGGAIN_8GAUSS, MAGGAIN_12GAUSS,
+                       MAGGAIN_16GAUSS)
+        reg = self._read_byte(_MAGTYPE, _LSM9DS1_REGISTER_CTRL_REG2_M)
+        reg = (reg & ~(0b01100000)) & 0xFF
+        reg |= val
+        self._write_byte(_MAGTYPE, _LSM9DS1_REGISTER_CTRL_REG2_M, [reg])
+        if val == MAGGAIN_4GAUSS:
+            self._mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_4GAUSS
+        elif val == MAGGAIN_8GAUSS:
+            self._mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_8GAUSS
+        elif val == MAGGAIN_12GAUSS:
+            self._mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_12GAUSS
+        elif val == MAGGAIN_16GAUSS:
+            self._mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_16GAUSS
 
     def _write_byte(self, sensorType, register, data = []):
         raise NotImplementedError()
@@ -181,8 +208,11 @@ class LSM9DS1_I2C(LSM9DS1):
         
 bus = SMBus(1)
 
-x = LSM9DS1_I2C(bus)
-x.accel_range = ACCELRANGE_8G
-print(x.accel_range)
+sensor = LSM9DS1_I2C(bus)
+
+sensor.accel_range = ACCELRANGE_8G
+print(sensor.accel_range)
+sensor.mag_gain = MAGGAIN_8GAUSS
+print(sensor.mag_gain)
 
 bus.close()
