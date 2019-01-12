@@ -89,13 +89,23 @@ class I2CDevice():
             return self.bus.read_byte_data(self.address, cmd)
         else:
             return self.bus.read_i2c_block_data(self.address, cmd, lenght)
+        
+    def write(self, cmd, data = []):
+        if len(data)<2:
+            self.bus.write_byte_data(self.address, cmd)
+        else:
+            self.bus.write_i2c_block_data(self.address, cmd, data)
             
 
 class LSM9DS1():
     def __init__(self):
         pass
 
-
+#     def write_reg(self, addr, reg, data):
+#         self.i2c.write_byte_data(addr, reg, data)
+#             
+    def _read_byte(self, sensorType, register):
+        raise NotImplementedError()
 
 
 class LSM9DS1_I2C(LSM9DS1):
@@ -104,7 +114,7 @@ class LSM9DS1_I2C(LSM9DS1):
         self._xg_device =  I2CDevice(i2cBus, _LSM9DS1_ADDRESS_ACCELGYRO)
         super().__init__()
     
-    def read_byte(self, sensorType, register):
+    def _read_byte(self, sensorType, register):
         if sensorType == _MAGTYPE:
             return self._mag_device.read(register, 1)
         else:
@@ -113,7 +123,7 @@ class LSM9DS1_I2C(LSM9DS1):
 bus = SMBus(1)
 
 x = LSM9DS1_I2C(bus)
-print(x.read_byte(_MAGTYPE,_LSM9DS1_REGISTER_WHO_AM_I_M))
-print(x.read_byte(_XGTYPE, _LSM9DS1_REGISTER_WHO_AM_I_XG))
+print(x._read_byte(_MAGTYPE,_LSM9DS1_REGISTER_WHO_AM_I_M))
+print(x._read_byte(_XGTYPE, _LSM9DS1_REGISTER_WHO_AM_I_XG))
 
 bus.close()
