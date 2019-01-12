@@ -180,6 +180,31 @@ class LSM9DS1():
             self._mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_12GAUSS
         elif val == MAGGAIN_16GAUSS:
             self._mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_16GAUSS
+            
+    @property
+    def gyro_scale(self):
+        """The gyroscope scale.  Must be a value of:
+          - GYROSCALE_245DPS
+          - GYROSCALE_500DPS
+          - GYROSCALE_2000DPS
+        """
+        reg = self._read_byte(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG1_G)
+        return (reg & 0b00011000) & 0xFF
+
+    @gyro_scale.setter
+    def gyro_scale(self, val):
+        assert val in (GYROSCALE_245DPS, GYROSCALE_500DPS, GYROSCALE_2000DPS)
+        reg = self._read_byte(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG1_G)
+        reg = (reg & ~(0b00011000)) & 0xFF
+        reg |= val
+        self._write_byte(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG1_G, [reg])
+        if val == GYROSCALE_245DPS:
+            self._gyro_dps_digit = _LSM9DS1_GYRO_DPS_DIGIT_245DPS
+        elif val == GYROSCALE_500DPS:
+            self._gyro_dps_digit = _LSM9DS1_GYRO_DPS_DIGIT_500DPS
+        elif val == GYROSCALE_2000DPS:
+            self._gyro_dps_digit = _LSM9DS1_GYRO_DPS_DIGIT_2000DPS
+
 
     def _write_byte(self, sensorType, register, data = []):
         raise NotImplementedError()
@@ -212,7 +237,12 @@ sensor = LSM9DS1_I2C(bus)
 
 sensor.accel_range = ACCELRANGE_8G
 print(sensor.accel_range)
+
 sensor.mag_gain = MAGGAIN_8GAUSS
 print(sensor.mag_gain)
+
+sensor.gyro_scale = GYROSCALE_2000DPS
+print(sensor.gyro_scale)
+
 
 bus.close()
