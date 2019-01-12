@@ -1,381 +1,199 @@
+from smbus import SMBus
+import RPi.GPIO as GPIO
 import time
-try:
-    import struct
-except ImportError:
-    import ustruct as struct
-
-import RPi.GPIO as GPIO 
-from smbus2 import SMBus
-
-# Internal ants and register values:
-# pylint: disable=bad-whitespace
-_LSM9DS1_ADDRESS_ACCELGYRO       = int(0x6B)
-_LSM9DS1_ADDRESS_MAG             = int(0x1E)
-_LSM9DS1_XG_ID                   = (0b01101000)
-_LSM9DS1_MAG_ID                  = (0b00111101)
-_LSM9DS1accel_mg_lsb_2G         = 0.061
-_LSM9DS1accel_mg_lsb_4G         = 0.122
-_LSM9DS1accel_mg_lsb_8G         = 0.244
-_LSM9DS1accel_mg_lsb_16G        = 0.732
-_LSM9DS1_MAG_MGAUSS_4GAUSS       = 0.14
-_LSM9DS1_MAG_MGAUSS_8GAUSS       = 0.29
-_LSM9DS1_MAG_MGAUSS_12GAUSS      = 0.43
-_LSM9DS1_MAG_MGAUSS_16GAUSS      = 0.58
-_LSM9DS1gyro_dps_digit_245DPS   = 0.00875
-_LSM9DS1gyro_dps_digit_500DPS   = 0.01750
-_LSM9DS1gyro_dps_digit_2000DPS  = 0.07000
-_LSM9DS1_TEMP_LSB_DEGREE_CELSIUS = 8 # 1°C = 8, 25° = 200, etc.
-_LSM9DS1_REGISTER_WHO_AM_I_XG    = (0x0F)
-_LSM9DS1_REGISTER_CTRL_REG1_G    = (0x10)
-_LSM9DS1_REGISTER_CTRL_REG2_G    = (0x11)
-_LSM9DS1_REGISTER_CTRL_REG3_G    = (0x12)
-_LSM9DS1_REGISTER_TEMP_OUT_L     = (0x15)
-_LSM9DS1_REGISTER_TEMP_OUT_H     = (0x16)
-_LSM9DS1_REGISTER_STATUS_REG     = (0x17)
-_LSM9DS1_REGISTER_OUT_X_L_G      = (0x18)
-_LSM9DS1_REGISTER_OUT_X_H_G      = (0x19)
-_LSM9DS1_REGISTER_OUT_Y_L_G      = (0x1A)
-_LSM9DS1_REGISTER_OUT_Y_H_G      = (0x1B)
-_LSM9DS1_REGISTER_OUT_Z_L_G      = (0x1C)
-_LSM9DS1_REGISTER_OUT_Z_H_G      = (0x1D)
-_LSM9DS1_REGISTER_CTRL_REG4      = (0x1E)
-_LSM9DS1_REGISTER_CTRL_REG5_XL   = (0x1F)
-_LSM9DS1_REGISTER_CTRL_REG6_XL   = (0x20)
-_LSM9DS1_REGISTER_CTRL_REG7_XL   = (0x21)
-_LSM9DS1_REGISTER_CTRL_REG8      = (0x22)
-_LSM9DS1_REGISTER_CTRL_REG9      = (0x23)
-_LSM9DS1_REGISTER_CTRL_REG10     = (0x24)
-_LSM9DS1_REGISTER_OUT_X_L_XL     = (0x28)
-_LSM9DS1_REGISTER_OUT_X_H_XL     = (0x29)
-_LSM9DS1_REGISTER_OUT_Y_L_XL     = (0x2A)
-_LSM9DS1_REGISTER_OUT_Y_H_XL     = (0x2B)
-_LSM9DS1_REGISTER_OUT_Z_L_XL     = (0x2C)
-_LSM9DS1_REGISTER_OUT_Z_H_XL     = (0x2D)
-_LSM9DS1_REGISTER_WHO_AM_I_M     = (0x0F)
-_LSM9DS1_REGISTER_CTRL_REG1_M    = (0x20)
-_LSM9DS1_REGISTER_CTRL_REG2_M    = (0x21)
-_LSM9DS1_REGISTER_CTRL_REG3_M    = (0x22)
-_LSM9DS1_REGISTER_CTRL_REG4_M    = (0x23)
-_LSM9DS1_REGISTER_CTRL_REG5_M    = (0x24)
-_LSM9DS1_REGISTER_STATUS_REG_M   = (0x27)
-_LSM9DS1_REGISTER_OUT_X_L_M      = (0x28)
-_LSM9DS1_REGISTER_OUT_X_H_M      = (0x29)
-_LSM9DS1_REGISTER_OUT_Y_L_M      = (0x2A)
-_LSM9DS1_REGISTER_OUT_Y_H_M      = (0x2B)
-_LSM9DS1_REGISTER_OUT_Z_L_M      = (0x2C)
-_LSM9DS1_REGISTER_OUT_Z_H_M      = (0x2D)
-_LSM9DS1_REGISTER_CFG_M          = (0x30)
-_LSM9DS1_REGISTER_INT_SRC_M      = (0x31)
-_MAGTYPE                         = True
-_XGTYPE                          = False
-_SENSORS_GRAVITY_STANDARD        = 9.80665
-
-# User facing ants/module globals.
-ACCELRANGE_2G                = (0b00 << 3)
-ACCELRANGE_16G               = (0b01 << 3)
-ACCELRANGE_4G                = (0b10 << 3)
-ACCELRANGE_8G                = (0b11 << 3)
-MAGGAIN_4GAUSS               = (0b00 << 5)  # +/- 4 gauss
-MAGGAIN_8GAUSS               = (0b01 << 5)  # +/- 8 gauss
-MAGGAIN_12GAUSS              = (0b10 << 5)  # +/- 12 gauss
-MAGGAIN_16GAUSS              = (0b11 << 5)  # +/- 16 gauss
-GYROSCALE_245DPS             = (0b00 << 3)  # +/- 245 degrees/s rotation
-GYROSCALE_500DPS             = (0b01 << 3)  # +/- 500 degrees/s rotation
-GYROSCALE_2000DPS            = (0b11 << 3)  # +/- 2000 degrees/s rotation
-# pylint: enable=bad-whitespace
+ACT_THS             = 0x04
+ACT_DUR             = 0x05
+INT_GEN_CFG_XL      = 0x06
+INT_GEN_THS_X_XL    = 0x07
+INT_GEN_THS_Y_XL    = 0x08
+INT_GEN_THS_Z_XL    = 0x09
+INT_GEN_DUR_XL      = 0x0A
+REFERENCE_G         = 0x0B
+INT1_CTRL           = 0x0C
+INT2_CTRL           = 0x0D
+WHO_AM_I_XG         = 0x0F
+CTRL_REG1_G         = 0x10
+CTRL_REG2_G         = 0x11
+CTRL_REG3_G         = 0x12
+ORIENT_CFG_G        = 0x13
+INT_GEN_SRC_G       = 0x14
+OUT_TEMP_L          = 0x15
+OUT_TEMP_H          = 0x16
+STATUS_REG_0        = 0x17
+OUT_X_L_G           = 0x18
+OUT_X_H_G           = 0x19
+OUT_Y_L_G           = 0x1A
+OUT_Y_H_G           = 0x1B
+OUT_Z_L_G           = 0x1C
+OUT_Z_H_G           = 0x1D
+CTRL_REG4           = 0x1E
+CTRL_REG5_XL        = 0x1F
+CTRL_REG6_XL        = 0x20
+CTRL_REG7_XL        = 0x21
+CTRL_REG8           = 0x22
+CTRL_REG9           = 0x23
+CTRL_REG10          = 0x24
+INT_GEN_SRC_XL      = 0x26
+STATUS_REG_1        = 0x27
+OUT_X_L_XL          = 0x28
+OUT_X_H_XL          = 0x29
+OUT_Y_L_XL          = 0x2A
+OUT_Y_H_XL          = 0x2B
+OUT_Z_L_XL          = 0x2C
+OUT_Z_H_XL          = 0x2D
+FIFO_CTRL           = 0x2E
+FIFO_SRC            = 0x2F
+INT_GEN_CFG_G       = 0x30
+INT_GEN_THS_XH_G    = 0x31
+INT_GEN_THS_XL_G    = 0x32
+INT_GEN_THS_YH_G    = 0x33
+INT_GEN_THS_YL_G    = 0x34
+INT_GEN_THS_ZH_G    = 0x35
+INT_GEN_THS_ZL_G    = 0x36
+INT_GEN_DUR_G       = 0x37
 
 
+OFFSET_X_REG_L_M    = 0x05
+OFFSET_X_REG_H_M    = 0x06
+OFFSET_Y_REG_L_M    = 0x07
+OFFSET_Y_REG_H_M    = 0x08
+OFFSET_Z_REG_L_M    = 0x09
+OFFSET_Z_REG_H_M    = 0x0A
+WHO_AM_I_M          = 0x0F
+CTRL_REG1_M         = 0x20
+CTRL_REG2_M         = 0x21
+CTRL_REG3_M         = 0x22
+CTRL_REG4_M         = 0x23
+CTRL_REG5_M         = 0x24
+STATUS_REG_M        = 0x27
+OUT_X_L_M           = 0x28
+OUT_X_H_M           = 0x29
+OUT_Y_L_M           = 0x2A
+OUT_Y_H_M           = 0x2B
+OUT_Z_L_M           = 0x2C
+OUT_Z_H_M           = 0x2D
+INT_CFG_M           = 0x30
+INT_SRC_M           = 0x31
+INT_THS_L_M         = 0x32
+INT_THS_H_M         = 0x33
 
+WHO_AM_I_AG_RSP     = 0x68
+WHO_AM_I_M_RSP      = 0x3D
 
-class LSM9DS1(object):
-    """Driver for the LSM9DS1 accelerometer, magnetometer, gyroscope."""
+SENSITIVITY_ACCELEROMETER_2  = 0.000061
+SENSITIVITY_ACCELEROMETER_4  = 0.000122
+SENSITIVITY_ACCELEROMETER_8  = 0.000244
+SENSITIVITY_ACCELEROMETER_16 = 0.000732
+SENSITIVITY_GYROSCOPE_245    = 0.00875
+SENSITIVITY_GYROSCOPE_500    = 0.0175
+SENSITIVITY_GYROSCOPE_2000   = 0.07
+SENSITIVITY_MAGNETOMETER_4   = 0.00014
+SENSITIVITY_MAGNETOMETER_8   = 0.00029
+SENSITIVITY_MAGNETOMETER_12  = 0.00043
+SENSITIVITY_MAGNETOMETER_16  = 0.00058
 
-    # Class-level buffer for reading and writing data with the sensor.
-    # This reduces memory allocations but means the code is not re-entrant or
-    # thread safe!
-    _BUFFER = bytearray(6)
-
+class gyro():
     def __init__(self):
-        # soft reset & reboot accel/gyro
-        self._write_u8(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG8, 0x05)
-        # soft reset & reboot magnetometer
-        self._write_u8(_MAGTYPE, _LSM9DS1_REGISTER_CTRL_REG2_M, 0x0C)
-        time.sleep(0.01)
-        # Check ID registers.
-        if self._read_u8(_XGTYPE, _LSM9DS1_REGISTER_WHO_AM_I_XG) != _LSM9DS1_XG_ID or self._read_u8(_MAGTYPE, _LSM9DS1_REGISTER_WHO_AM_I_M) != _LSM9DS1_MAG_ID:
-            raise RuntimeError('Could not find LSM9DS1, check wiring!')
-        # enable gyro continuous
-        self._write_u8(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG1_G, 0xC0) # on XYZ
-        # Enable the accelerometer continous
-        self._write_u8(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG5_XL, 0x38)
-        self._write_u8(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG6_XL, 0xC0)
-        # enable mag continuous
-        self._write_u8(_MAGTYPE, _LSM9DS1_REGISTER_CTRL_REG3_M, 0x00)
-        # Set default ranges for the various sensors
-        self.accel_mg_lsb = None
-        self.mag_mgauss_lsb = None
-        self.gyro_dps_digit = None
-        self.accel_range = ACCELRANGE_2G
-        self.mag_gain = MAGGAIN_4GAUSS
-        self.gyro_scale = GYROSCALE_245DPS
 
-    def accel_range(self):
-        """The accelerometer range.  Must be a value of:
-          - ACCELRANGE_2G
-          - ACCELRANGE_4G
-          - ACCELRANGE_8G
-          - ACCELRANGE_16G
-        """
-        reg = self._read_u8(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG6_XL)
-        return (reg & 0b00011000) & 0xFF
-
-    def accel_range(self, val):
-        assert val in (ACCELRANGE_2G, ACCELRANGE_4G, ACCELRANGE_8G,
-                       ACCELRANGE_16G)
-        reg = self._read_u8(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG6_XL)
-        reg = (reg & ~(0b00011000)) & 0xFF
-        reg |= val
-        self._write_u8(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG6_XL, reg)
-        if val == ACCELRANGE_2G:
-            self.accel_mg_lsb = _LSM9DS1accel_mg_lsb_2G
-        elif val == ACCELRANGE_4G:
-            self.accel_mg_lsb = _LSM9DS1accel_mg_lsb_4G
-        elif val == ACCELRANGE_8G:
-            self.accel_mg_lsb = _LSM9DS1accel_mg_lsb_8G
-        elif val == ACCELRANGE_16G:
-            self.accel_mg_lsb = _LSM9DS1accel_mg_lsb_16G
-
-    def mag_gain(self):
-        """The magnetometer gain.  Must be a value of:
-          - MAGGAIN_4GAUSS
-          - MAGGAIN_8GAUSS
-          - MAGGAIN_12GAUSS
-          - MAGGAIN_16GAUSS
-        """
-        reg = self._read_u8(_MAGTYPE, _LSM9DS1_REGISTER_CTRL_REG2_M)
-        return (reg & 0b01100000) & 0xFF
-
-    def mag_gain(self, val):
-        assert val in (MAGGAIN_4GAUSS, MAGGAIN_8GAUSS, MAGGAIN_12GAUSS,
-                       MAGGAIN_16GAUSS)
-        reg = self._read_u8(_MAGTYPE, _LSM9DS1_REGISTER_CTRL_REG2_M)
-        reg = (reg & ~(0b01100000)) & 0xFF
-        reg |= val
-        self._write_u8(_MAGTYPE, _LSM9DS1_REGISTER_CTRL_REG2_M, reg)
-        if val == MAGGAIN_4GAUSS:
-            self.mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_4GAUSS
-        elif val == MAGGAIN_8GAUSS:
-            self.mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_8GAUSS
-        elif val == MAGGAIN_12GAUSS:
-            self.mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_12GAUSS
-        elif val == MAGGAIN_16GAUSS:
-            self.mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_16GAUSS
-
-    def gyro_scale(self):
-        """The gyroscope scale.  Must be a value of:
-          - GYROSCALE_245DPS
-          - GYROSCALE_500DPS
-          - GYROSCALE_2000DPS
-        """
-        reg = self._read_u8(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG1_G)
-        return (reg & 0b00011000) & 0xFF
-
-    def gyro_scale(self, val):
-        assert val in (GYROSCALE_245DPS, GYROSCALE_500DPS, GYROSCALE_2000DPS)
-        reg = self._read_u8(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG1_G)
-        reg = (reg & ~(0b00011000)) & 0xFF
-        reg |= val
-        self._write_u8(_XGTYPE, _LSM9DS1_REGISTER_CTRL_REG1_G, reg)
-        if val == GYROSCALE_245DPS:
-            self.gyro_dps_digit = _LSM9DS1gyro_dps_digit_245DPS
-        elif val == GYROSCALE_500DPS:
-            self.gyro_dps_digit = _LSM9DS1gyro_dps_digit_500DPS
-        elif val == GYROSCALE_2000DPS:
-            self.gyro_dps_digit = _LSM9DS1gyro_dps_digit_2000DPS
-
-    def read_accel_raw(self):
-        """Read the raw accelerometer sensor values and return it as a
-        3-tuple of X, Y, Z axis values that are 16-bit unsigned values.  If you
-        want the acceleration in nice units you probably want to use the
-        accelerometer property!
-        """
-        # Read the accelerometer
-        self._read_bytes(_XGTYPE, 0x80 | _LSM9DS1_REGISTER_OUT_X_L_XL, 6,
-                         self._BUFFER)
-        raw_x, raw_y, raw_z = struct.unpack_from('<hhh', self._BUFFER[0:6])
-        return (raw_x, raw_y, raw_z)
-
-    def acceleration(self):
-        """The accelerometer X, Y, Z axis values as a 3-tuple of
-        m/s^2 values.
-        """
-        raw = self.read_accel_raw()
-        return map(lambda x: x * self.accel_mg_lsb / 1000.0 * _SENSORS_GRAVITY_STANDARD,
-                   raw)
-
-    def read_mag_raw(self):
-        """Read the raw magnetometer sensor values and return it as a
-        3-tuple of X, Y, Z axis values that are 16-bit unsigned values.  If you
-        want the magnetometer in nice units you probably want to use the
-        magnetometer property!
-        """
-        # Read the magnetometer
-        self._read_bytes(_MAGTYPE, 0x80 | _LSM9DS1_REGISTER_OUT_X_L_M, 6,
-                         self._BUFFER)
-        raw_x, raw_y, raw_z = struct.unpack_from('<hhh', self._BUFFER[0:6])
-        return (raw_x, raw_y, raw_z)
-
-    def magnetic(self):
-        """The magnetometer X, Y, Z axis values as a 3-tuple of
-        gauss values.
-        """
-        raw = self.read_mag_raw()
-        return map(lambda x: x * self.mag_mgauss_lsb / 1000.0, raw)
-
-    def read_gyro_raw(self):
-        """Read the raw gyroscope sensor values and return it as a
-        3-tuple of X, Y, Z axis values that are 16-bit unsigned values.  If you
-        want the gyroscope in nice units you probably want to use the
-        gyroscope property!
-        """
-        # Read the gyroscope
-        self._read_bytes(_XGTYPE, 0x80 | _LSM9DS1_REGISTER_OUT_X_L_G, 6,
-                         self._BUFFER)
-        raw_x, raw_y, raw_z = struct.unpack_from('<hhh', self._BUFFER[0:6])
-        return (raw_x, raw_y, raw_z)
-
-    def gyro(self):
-        """The gyroscope X, Y, Z axis values as a 3-tuple of
-        degrees/second values.
-        """
-        raw = self.read_gyro_raw()
-        return map(lambda x: x * self.gyro_dps_digit, raw)
-
-    def read_temp_raw(self):
-        """Read the raw temperature sensor value and return it as a 12-bit
-        signed value.  If you want the temperature in nice units you probably
-        want to use the temperature property!
-        """
-        # Read temp sensor
-        self._read_bytes(_XGTYPE, 0x80 | _LSM9DS1_REGISTER_TEMP_OUT_L, 2,
-                         self._BUFFER)
-        temp = ((self._BUFFER[1] << 8) | self._BUFFER[0]) >> 4
-        return _twos_comp(temp, 12)
-
-    def temperature(self):
-        """The temperature of the sensor in degrees Celsius."""
-        # This is just a guess since the starting point (21C here) isn't documented :(
-        # See discussion from:
-        #  https://github.com/kriswiner/LSM9DS1/issues/3
-        temp = self.read_temp_raw()
-        temp = 27.5 + temp/16
-        return temp
-
-    def _read_u8(self, sensor_type, address):
-        # Read an 8-bit unsigned value from the specified 8-bit address.
-        # The sensor_type boolean should be _MAGTYPE when talking to the
-        # magnetometer, or _XGTYPE when talking to the accel or gyro.
-        # MUST be implemented by subclasses!
-        raise NotImplementedError()
-
-    def _read_bytes(self, sensor_type, address, count, buf):
-        # Read a count number of bytes into buffer from the provided 8-bit
-        # register address.  The sensor_type boolean should be _MAGTYPE when
-        # talking to the magnetometer, or _XGTYPE when talking to the accel or
-        # gyro.  MUST be implemented by subclasses!
-        raise NotImplementedError()
-
-    def _write_u8(self, sensor_type, address, val):
-        # Write an 8-bit unsigned value to the specified 8-bit address.
-        # The sensor_type boolean should be _MAGTYPE when talking to the
-        # magnetometer, or _XGTYPE when talking to the accel or gyro.
-        # MUST be implemented by subclasses!
-        raise NotImplementedError()
-
-class I2C_Device():
-    def __init__(self, busNumber, deviceAddress):
-        self._busNumber = busNumber
-        self._deviceAddress = deviceAddress
-        self._bus = SMBus(busNumber)
-
-
+        self.gyro_enabled = True;
+        self.gyro_enableX = True;
+        self.gyro_enableY = True;
+        self.gyro_enableZ = True;
+        # gyro scale can be 245, 500, or 2000
+        self.gyro_scale = 245;
+        # gyro sample rate: value between 1-6
+        # 1 = 14.9    4 = 238
+        # 2 = 59.5    5 = 476
+        # 3 = 119     6 = 952
+        self.gyro_sampleRate = 6;
+        # gyro cutoff frequency: value between 0-3
+        # Actual value of cutoff frequency depends
+        # on sample rate.
+        self.gyro_bandwidth = 0;
+        self.gyro_lowPowerEnable = False  ;
+        self.gyro_HPFEnable = False ;
+        # Gyro HPF cutoff frequency: value between 0-9
+        # Actual value depends on sample rate. Only applies
+        # if gyroHPFEnable is True.
+        self.gyro_HPFCutoff = 0;
+        self.gyro_flipX = False ;
+        self.gyro_flipY = False ;
+        self.gyro_flipZ = False ;
+        self.gyro_orientation = 0;
+        self.gyro_latchInterrupt = True;
     
-    def read_byte(self, register):
-        return self._bus.read_byte_data(self._deviceAddress, register)
+class accel():
+    def __init__(self):
 
-    def read_bytes(self, buf, length):
-        buf = self._bus.read_i2c_block_data(self._deviceAddress, buf[0], length)
-    
-    def write_byte(self, register, value):
-        return self._bus.write_byte_data(self._deviceAddress, register, value)
-   
-    def close_bus(self):
-        self._bus.close()
+        self.accel_enabled = True;
+        self.accel_enableX = True;
+        self.accel_enableY = True;
+        self.accel_enableZ = True;
+        # accel scale can be 2, 4, 8, or 16
+        self.accel_scale = 2;
+        # accel sample rate can be 1-6
+        # 1 = 10 Hz    4 = 238 Hz
+        # 2 = 50 Hz    5 = 476 Hz
+        # 3 = 119 Hz   6 = 952 Hz
+        self.accel_sampleRate = 6;
+        # Accel cutoff freqeuncy can be any value between -1 - 3. 
+        # -1 = bandwidth determined by sample rate
+        # 0 = 408 Hz   2 = 105 Hz
+        # 1 = 211 Hz   3 = 50 Hz
+        self.accel_bandwidth = -1;
+        self.accel_highResEnable = false;
+        # accelHighResBandwidth can be any value between 0-3
+        # LP cutoff is set to a factor of sample rate
+        # 0 = ODR/50    2 = ODR/9
+        # 1 = ODR/100   3 = ODR/400
+        self.accel_highResBandwidth = 0;
 
-class LSM9DS1_I2C(LSM9DS1):
-    
-    """Driver for the LSM9DS1 connect over I2C."""
+class mag():
+    def __init(self):
+        self.mag_enabled = true;
+        # mag scale can be 4, 8, 12, or 16
+        self.mag_scale = 4;
+        # mag data rate can be 0-7
+        # 0 = 0.625 Hz  4 = 10 Hz
+        # 1 = 1.25 Hz   5 = 20 Hz
+        # 2 = 2.5 Hz    6 = 40 Hz
+        # 3 = 5 Hz      7 = 80 Hz
+        self.mag_sampleRate = 7;
+        self.mag_tempCompensationEnable = false;
+        # magPerformance can be any value between 0-3
+        # 0 = Low power mode      2 = high performance
+        # 1 = medium performance  3 = ultra-high performance
+        self.mag_XYPerformance = 3;
+        self.mag_ZPerformance = 3;
+        self.mag_lowPowerEnable = false;
+        # magOperatingMode can be 0-2
+        # 0 = continuous conversion
+        # 1 = single-conversion
+        # 2 = power down
+        self.mag_operatingMode = 0;
 
-    def __init__(self, i2cBusId):
-        self._mag_device = I2C_Device(i2cBusId, _LSM9DS1_ADDRESS_MAG)
-        self._xg_device = I2C_Device(i2cBusId, _LSM9DS1_ADDRESS_ACCELGYRO)
-        super().__init__()
+class LSM9DS1():
+    def __init__(self, i2c=None, g_addr=0x6B, xm_addr=0x1e):
+        if not (i2c):
+            raise Exception("must have an i2c or spi object")
+        self.i2c = i2c
+        self.g_addr = g_addr
+        self.xm_addr = xm_addr
 
-    def _read_u8(self, sensor_type, address):
-        if sensor_type == _MAGTYPE:
-            device = self._mag_device
-        else:
-            device = self._xg_device
-
-        self._BUFFER[0] = address & 0xFF
-
-        device.read_byte(self._BUFFER[0])
-        
-        return self._BUFFER[0]
-
-    def _read_bytes(self, sensor_type, address, count, buf):
-        if sensor_type == _MAGTYPE:
-            device = self._mag_device
-        else:
-            device = self._xg_device
-        
-        buf[0] = address & 0xFF
-        device.write_byte(buf[0])
-        device.read_bytes(buf, count)
-
-    def _write_u8(self, sensor_type, address, val):
-        if sensor_type == _MAGTYPE:
-            device = self._mag_device
-        else:
-            device = self._xg_device
-        self._BUFFER[0] = address & 0xFF
-        self._BUFFER[1] = val & 0xFF
-        device.write_byte(self._BUFFER[0], self._BUFFER[1])
-    
-
-csag = 17
-csn = 18
-
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(csag, GPIO.OUT)
-GPIO.setup(csn, GPIO.OUT)
-
-GPIO.output(csag, GPIO.HIGH)
-GPIO.output(csag, GPIO.HIGH)
-
-x = LSM9DS1_I2C(1)
-
-# Read acceleration, magnetometer, gyroscope, temperature.
-# accel_x, accel_y, accel_z = x.acceleration
-# mag_x, mag_y, mag_z = x.magnetic
-gyro_x, gyro_y, gyro_z = x.gyro()
-# temp = x.temperature
-# Print values.
-# print('Acceleration (m/s^2): ({0:0.3f},{1:0.3f},{2:0.3f})'.format(accel_x, accel_y, accel_z))
-# print('Magnetometer (gauss): ({0:0.3f},{1:0.3f},{2:0.3f})'.format(mag_x, mag_y, mag_z))
-print('Gyroscope (degrees/sec): ({0:0.3f},{1:0.3f},{2:0.3f})'.format(gyro_x, gyro_y, gyro_z))
-# print('Temperature: {0:0.3f}C'.format(temp))
-# print(x._mag_device.read_i2c_bytes(0, 32))
-x._mag_device.close_bus()
+#         self.write_reg(self.g_addr, CTRL_REG1_G, 0b00001111)
 
 
+    def write_reg(self, addr, reg, data):
+        self.i2c.write_byte_data(addr, reg, data)
+            
+    def read_reg(self, addr, reg):
+        return self.i2c.read_byte_data(addr, reg)
+
+
+bus = SMBus(1)
+
+x = LSM9DS1(bus)
+print(x.read_reg(x.xm_addr, WHO_AM_I_M))
+print(x.read_reg(x.g_addr, WHO_AM_I_XG))
+
+bus.close()
