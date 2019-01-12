@@ -1,199 +1,119 @@
 from smbus import SMBus
 import RPi.GPIO as GPIO
 import time
-ACT_THS             = 0x04
-ACT_DUR             = 0x05
-INT_GEN_CFG_XL      = 0x06
-INT_GEN_THS_X_XL    = 0x07
-INT_GEN_THS_Y_XL    = 0x08
-INT_GEN_THS_Z_XL    = 0x09
-INT_GEN_DUR_XL      = 0x0A
-REFERENCE_G         = 0x0B
-INT1_CTRL           = 0x0C
-INT2_CTRL           = 0x0D
-WHO_AM_I_XG         = 0x0F
-CTRL_REG1_G         = 0x10
-CTRL_REG2_G         = 0x11
-CTRL_REG3_G         = 0x12
-ORIENT_CFG_G        = 0x13
-INT_GEN_SRC_G       = 0x14
-OUT_TEMP_L          = 0x15
-OUT_TEMP_H          = 0x16
-STATUS_REG_0        = 0x17
-OUT_X_L_G           = 0x18
-OUT_X_H_G           = 0x19
-OUT_Y_L_G           = 0x1A
-OUT_Y_H_G           = 0x1B
-OUT_Z_L_G           = 0x1C
-OUT_Z_H_G           = 0x1D
-CTRL_REG4           = 0x1E
-CTRL_REG5_XL        = 0x1F
-CTRL_REG6_XL        = 0x20
-CTRL_REG7_XL        = 0x21
-CTRL_REG8           = 0x22
-CTRL_REG9           = 0x23
-CTRL_REG10          = 0x24
-INT_GEN_SRC_XL      = 0x26
-STATUS_REG_1        = 0x27
-OUT_X_L_XL          = 0x28
-OUT_X_H_XL          = 0x29
-OUT_Y_L_XL          = 0x2A
-OUT_Y_H_XL          = 0x2B
-OUT_Z_L_XL          = 0x2C
-OUT_Z_H_XL          = 0x2D
-FIFO_CTRL           = 0x2E
-FIFO_SRC            = 0x2F
-INT_GEN_CFG_G       = 0x30
-INT_GEN_THS_XH_G    = 0x31
-INT_GEN_THS_XL_G    = 0x32
-INT_GEN_THS_YH_G    = 0x33
-INT_GEN_THS_YL_G    = 0x34
-INT_GEN_THS_ZH_G    = 0x35
-INT_GEN_THS_ZL_G    = 0x36
-INT_GEN_DUR_G       = 0x37
 
+# Internal ants and register values:
+# pylint: disable=bad-whitespace
+_LSM9DS1_ADDRESS_ACCELGYRO       = (0x6B)
+_LSM9DS1_ADDRESS_MAG             = (0x1E)
+_LSM9DS1_XG_ID                   = (0b01101000)
+_LSM9DS1_MAG_ID                  = (0b00111101)
+_LSM9DS1_ACCEL_MG_LSB_2G         = 0.061
+_LSM9DS1_ACCEL_MG_LSB_4G         = 0.122
+_LSM9DS1_ACCEL_MG_LSB_8G         = 0.244
+_LSM9DS1_ACCEL_MG_LSB_16G        = 0.732
+_LSM9DS1_MAG_MGAUSS_4GAUSS       = 0.14
+_LSM9DS1_MAG_MGAUSS_8GAUSS       = 0.29
+_LSM9DS1_MAG_MGAUSS_12GAUSS      = 0.43
+_LSM9DS1_MAG_MGAUSS_16GAUSS      = 0.58
+_LSM9DS1_GYRO_DPS_DIGIT_245DPS   = 0.00875
+_LSM9DS1_GYRO_DPS_DIGIT_500DPS   = 0.01750
+_LSM9DS1_GYRO_DPS_DIGIT_2000DPS  = 0.07000
+_LSM9DS1_TEMP_LSB_DEGREE_CELSIUS = 8 # 1°C = 8, 25° = 200, etc.
+_LSM9DS1_REGISTER_WHO_AM_I_XG    = (0x0F)
+_LSM9DS1_REGISTER_CTRL_REG1_G    = (0x10)
+_LSM9DS1_REGISTER_CTRL_REG2_G    = (0x11)
+_LSM9DS1_REGISTER_CTRL_REG3_G    = (0x12)
+_LSM9DS1_REGISTER_TEMP_OUT_L     = (0x15)
+_LSM9DS1_REGISTER_TEMP_OUT_H     = (0x16)
+_LSM9DS1_REGISTER_STATUS_REG     = (0x17)
+_LSM9DS1_REGISTER_OUT_X_L_G      = (0x18)
+_LSM9DS1_REGISTER_OUT_X_H_G      = (0x19)
+_LSM9DS1_REGISTER_OUT_Y_L_G      = (0x1A)
+_LSM9DS1_REGISTER_OUT_Y_H_G      = (0x1B)
+_LSM9DS1_REGISTER_OUT_Z_L_G      = (0x1C)
+_LSM9DS1_REGISTER_OUT_Z_H_G      = (0x1D)
+_LSM9DS1_REGISTER_CTRL_REG4      = (0x1E)
+_LSM9DS1_REGISTER_CTRL_REG5_XL   = (0x1F)
+_LSM9DS1_REGISTER_CTRL_REG6_XL   = (0x20)
+_LSM9DS1_REGISTER_CTRL_REG7_XL   = (0x21)
+_LSM9DS1_REGISTER_CTRL_REG8      = (0x22)
+_LSM9DS1_REGISTER_CTRL_REG9      = (0x23)
+_LSM9DS1_REGISTER_CTRL_REG10     = (0x24)
+_LSM9DS1_REGISTER_OUT_X_L_XL     = (0x28)
+_LSM9DS1_REGISTER_OUT_X_H_XL     = (0x29)
+_LSM9DS1_REGISTER_OUT_Y_L_XL     = (0x2A)
+_LSM9DS1_REGISTER_OUT_Y_H_XL     = (0x2B)
+_LSM9DS1_REGISTER_OUT_Z_L_XL     = (0x2C)
+_LSM9DS1_REGISTER_OUT_Z_H_XL     = (0x2D)
+_LSM9DS1_REGISTER_WHO_AM_I_M     = (0x0F)
+_LSM9DS1_REGISTER_CTRL_REG1_M    = (0x20)
+_LSM9DS1_REGISTER_CTRL_REG2_M    = (0x21)
+_LSM9DS1_REGISTER_CTRL_REG3_M    = (0x22)
+_LSM9DS1_REGISTER_CTRL_REG4_M    = (0x23)
+_LSM9DS1_REGISTER_CTRL_REG5_M    = (0x24)
+_LSM9DS1_REGISTER_STATUS_REG_M   = (0x27)
+_LSM9DS1_REGISTER_OUT_X_L_M      = (0x28)
+_LSM9DS1_REGISTER_OUT_X_H_M      = (0x29)
+_LSM9DS1_REGISTER_OUT_Y_L_M      = (0x2A)
+_LSM9DS1_REGISTER_OUT_Y_H_M      = (0x2B)
+_LSM9DS1_REGISTER_OUT_Z_L_M      = (0x2C)
+_LSM9DS1_REGISTER_OUT_Z_H_M      = (0x2D)
+_LSM9DS1_REGISTER_CFG_M          = (0x30)
+_LSM9DS1_REGISTER_INT_SRC_M      = (0x31)
+_MAGTYPE                         = True
+_XGTYPE                          = False
+_SENSORS_GRAVITY_STANDARD        = 9.80665
 
-OFFSET_X_REG_L_M    = 0x05
-OFFSET_X_REG_H_M    = 0x06
-OFFSET_Y_REG_L_M    = 0x07
-OFFSET_Y_REG_H_M    = 0x08
-OFFSET_Z_REG_L_M    = 0x09
-OFFSET_Z_REG_H_M    = 0x0A
-WHO_AM_I_M          = 0x0F
-CTRL_REG1_M         = 0x20
-CTRL_REG2_M         = 0x21
-CTRL_REG3_M         = 0x22
-CTRL_REG4_M         = 0x23
-CTRL_REG5_M         = 0x24
-STATUS_REG_M        = 0x27
-OUT_X_L_M           = 0x28
-OUT_X_H_M           = 0x29
-OUT_Y_L_M           = 0x2A
-OUT_Y_H_M           = 0x2B
-OUT_Z_L_M           = 0x2C
-OUT_Z_H_M           = 0x2D
-INT_CFG_M           = 0x30
-INT_SRC_M           = 0x31
-INT_THS_L_M         = 0x32
-INT_THS_H_M         = 0x33
+# User facing ants/module globals.
+ACCELRANGE_2G                = (0b00 << 3)
+ACCELRANGE_16G               = (0b01 << 3)
+ACCELRANGE_4G                = (0b10 << 3)
+ACCELRANGE_8G                = (0b11 << 3)
+MAGGAIN_4GAUSS               = (0b00 << 5)  # +/- 4 gauss
+MAGGAIN_8GAUSS               = (0b01 << 5)  # +/- 8 gauss
+MAGGAIN_12GAUSS              = (0b10 << 5)  # +/- 12 gauss
+MAGGAIN_16GAUSS              = (0b11 << 5)  # +/- 16 gauss
+GYROSCALE_245DPS             = (0b00 << 3)  # +/- 245 degrees/s rotation
+GYROSCALE_500DPS             = (0b01 << 3)  # +/- 500 degrees/s rotation
+GYROSCALE_2000DPS            = (0b11 << 3)  # +/- 2000 degrees/s rotation
+# pylint: enable=bad-whitespace
 
-WHO_AM_I_AG_RSP     = 0x68
-WHO_AM_I_M_RSP      = 0x3D
-
-SENSITIVITY_ACCELEROMETER_2  = 0.000061
-SENSITIVITY_ACCELEROMETER_4  = 0.000122
-SENSITIVITY_ACCELEROMETER_8  = 0.000244
-SENSITIVITY_ACCELEROMETER_16 = 0.000732
-SENSITIVITY_GYROSCOPE_245    = 0.00875
-SENSITIVITY_GYROSCOPE_500    = 0.0175
-SENSITIVITY_GYROSCOPE_2000   = 0.07
-SENSITIVITY_MAGNETOMETER_4   = 0.00014
-SENSITIVITY_MAGNETOMETER_8   = 0.00029
-SENSITIVITY_MAGNETOMETER_12  = 0.00043
-SENSITIVITY_MAGNETOMETER_16  = 0.00058
-
-class gyro():
-    def __init__(self):
-
-        self.gyro_enabled = True;
-        self.gyro_enableX = True;
-        self.gyro_enableY = True;
-        self.gyro_enableZ = True;
-        # gyro scale can be 245, 500, or 2000
-        self.gyro_scale = 245;
-        # gyro sample rate: value between 1-6
-        # 1 = 14.9    4 = 238
-        # 2 = 59.5    5 = 476
-        # 3 = 119     6 = 952
-        self.gyro_sampleRate = 6;
-        # gyro cutoff frequency: value between 0-3
-        # Actual value of cutoff frequency depends
-        # on sample rate.
-        self.gyro_bandwidth = 0;
-        self.gyro_lowPowerEnable = False  ;
-        self.gyro_HPFEnable = False ;
-        # Gyro HPF cutoff frequency: value between 0-9
-        # Actual value depends on sample rate. Only applies
-        # if gyroHPFEnable is True.
-        self.gyro_HPFCutoff = 0;
-        self.gyro_flipX = False ;
-        self.gyro_flipY = False ;
-        self.gyro_flipZ = False ;
-        self.gyro_orientation = 0;
-        self.gyro_latchInterrupt = True;
-    
-class accel():
-    def __init__(self):
-
-        self.accel_enabled = True;
-        self.accel_enableX = True;
-        self.accel_enableY = True;
-        self.accel_enableZ = True;
-        # accel scale can be 2, 4, 8, or 16
-        self.accel_scale = 2;
-        # accel sample rate can be 1-6
-        # 1 = 10 Hz    4 = 238 Hz
-        # 2 = 50 Hz    5 = 476 Hz
-        # 3 = 119 Hz   6 = 952 Hz
-        self.accel_sampleRate = 6;
-        # Accel cutoff freqeuncy can be any value between -1 - 3. 
-        # -1 = bandwidth determined by sample rate
-        # 0 = 408 Hz   2 = 105 Hz
-        # 1 = 211 Hz   3 = 50 Hz
-        self.accel_bandwidth = -1;
-        self.accel_highResEnable = false;
-        # accelHighResBandwidth can be any value between 0-3
-        # LP cutoff is set to a factor of sample rate
-        # 0 = ODR/50    2 = ODR/9
-        # 1 = ODR/100   3 = ODR/400
-        self.accel_highResBandwidth = 0;
-
-class mag():
-    def __init(self):
-        self.mag_enabled = true;
-        # mag scale can be 4, 8, 12, or 16
-        self.mag_scale = 4;
-        # mag data rate can be 0-7
-        # 0 = 0.625 Hz  4 = 10 Hz
-        # 1 = 1.25 Hz   5 = 20 Hz
-        # 2 = 2.5 Hz    6 = 40 Hz
-        # 3 = 5 Hz      7 = 80 Hz
-        self.mag_sampleRate = 7;
-        self.mag_tempCompensationEnable = false;
-        # magPerformance can be any value between 0-3
-        # 0 = Low power mode      2 = high performance
-        # 1 = medium performance  3 = ultra-high performance
-        self.mag_XYPerformance = 3;
-        self.mag_ZPerformance = 3;
-        self.mag_lowPowerEnable = false;
-        # magOperatingMode can be 0-2
-        # 0 = continuous conversion
-        # 1 = single-conversion
-        # 2 = power down
-        self.mag_operatingMode = 0;
+class I2CDevice():
+    def __init__(self, bus, address):
+        self.bus = bus
+        self.address = address
+        
+    def read(self, cmd, lenght):
+        if lenght<2:
+            return self.bus.read_byte_data(self.address, cmd)
+        else:
+            return self.bus.read_i2c_block_data(self.address, cmd, lenght)
+            
 
 class LSM9DS1():
-    def __init__(self, i2c=None, g_addr=0x6B, xm_addr=0x1e):
-        if not (i2c):
-            raise Exception("must have an i2c or spi object")
-        self.i2c = i2c
-        self.g_addr = g_addr
-        self.xm_addr = xm_addr
-
-#         self.write_reg(self.g_addr, CTRL_REG1_G, 0b00001111)
+    def __init__(self):
+        pass
 
 
-    def write_reg(self, addr, reg, data):
-        self.i2c.write_byte_data(addr, reg, data)
-            
-    def read_reg(self, addr, reg):
-        return self.i2c.read_byte_data(addr, reg)
 
 
+class LSM9DS1_I2C(LSM9DS1):
+    def __init__(self, i2cBus):
+        self._mag_device = I2CDevice(i2cBus, _LSM9DS1_ADDRESS_MAG)
+        self._xg_device =  I2CDevice(i2cBus, _LSM9DS1_ADDRESS_ACCELGYRO)
+        super().__init__()
+    
+    def read_byte(self, sensorType, register):
+        if sensorType == _MAGTYPE:
+            return self._mag_device.read(register, 1)
+        else:
+            return self._xg_device.read(register, 1)
+        
 bus = SMBus(1)
 
-x = LSM9DS1(bus)
-print(x.read_reg(x.xm_addr, WHO_AM_I_M))
-print(x.read_reg(x.g_addr, WHO_AM_I_XG))
+x = LSM9DS1_I2C(bus)
+print(x.read_byte(_MAGTYPE,_LSM9DS1_REGISTER_WHO_AM_I_M))
+print(x.read_byte(_XGTYPE, _LSM9DS1_REGISTER_WHO_AM_I_XG))
 
 bus.close()
