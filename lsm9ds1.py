@@ -1,5 +1,6 @@
 from smbus import SMBus
 import RPi.GPIO as GPIO
+import struct
 import time
 
 # Internal ants and register values:
@@ -123,8 +124,7 @@ class LSM9DS1():
         self.accel_range = ACCELRANGE_2G
         self.mag_gain = MAGGAIN_4GAUSS
         self.gyro_scale = GYROSCALE_245DPS
-        print("Init done")
-    
+
     @property
     def accel_range(self):
         """The accelerometer range.  Must be a value of:
@@ -204,12 +204,33 @@ class LSM9DS1():
             self._gyro_dps_digit = _LSM9DS1_GYRO_DPS_DIGIT_500DPS
         elif val == GYROSCALE_2000DPS:
             self._gyro_dps_digit = _LSM9DS1_GYRO_DPS_DIGIT_2000DPS
+            
+    def read_accel_raw(self):
+        """Read the raw accelerometer sensor values and return it as a
+        3-tuple of X, Y, Z axis values that are 16-bit unsigned values.  If you
+        want the acceleration in nice units you probably want to use the
+        accelerometer property!
+        """
+        # Read the accelerometer
+        asdf = self._read_bytes(_XGTYPE, 0x80 | _LSM9DS1_REGISTER_OUT_X_L_XL, 6)
+        raw_x, raw_y, raw_z = struct.unpack_from('<hhh', bytes(asdf))
+        return (raw_x, raw_y, raw_z)
 
+    @property
+    def acceleration(self):
+        """The accelerometer X, Y, Z axis values as a 3-tuple of
+        m/s^2 values.
+        """
+        raw = self.read_accel_raw()
+        return list(map(lambda x: x * self._accel_mg_lsb / 1000.0 * _SENSORS_GRAVITY_STANDARD, raw))
 
     def _write_byte(self, sensorType, register, data = []):
         raise NotImplementedError()
     
     def _read_byte(self, sensorType, register):
+        raise NotImplementedError()
+    
+    def _read_bytes(self, sensorType, register, count):
         raise NotImplementedError()
 
 
@@ -221,28 +242,28 @@ class LSM9DS1_I2C(LSM9DS1):
     
     def _write_byte(self, sensorType, register, data = []):
         if sensorType == _MAGTYPE:
-            return self._mag_device.write(register, data)
+            self._mag_device.write(register, data)
         else:
-            return self._xg_device.write(register, data)
+            self._xg_device.write(register, data)
     
     def _read_byte(self, sensorType, register):
         if sensorType == _MAGTYPE:
             return self._mag_device.read(register, 1)
         else:
             return self._xg_device.read(register, 1)
+    
+    def _read_bytes(self, sensorType, register, count):
+        if sensorType == _MAGTYPE:
+            return self._mag_device.read(register, count)
+        else:
+            return self._xg_device.read(register, count)
+        
         
 bus = SMBus(1)
 
 sensor = LSM9DS1_I2C(bus)
-
-sensor.accel_range = ACCELRANGE_8G
-print(sensor.accel_range)
-
-sensor.mag_gain = MAGGAIN_8GAUSS
-print(sensor.mag_gain)
-
-sensor.gyro_scale = GYROSCALE_2000DPS
-print(sensor.gyro_scale)
+sensor.accel_range = ACCELRANGE_2G
+print(sensor.acceleration)
 
 
 bus.close()
