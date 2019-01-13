@@ -243,6 +243,24 @@ class LSM9DS1():
         raw = self.read_mag_raw()
         return list(map(lambda x: x * self._mag_mgauss_lsb / 1000.0, raw))
 
+    def read_gyro_raw(self):
+        """Read the raw gyroscope sensor values and return it as a
+        3-tuple of X, Y, Z axis values that are 16-bit unsigned values.  If you
+        want the gyroscope in nice units you probably want to use the
+        gyroscope property!
+        """
+        # Read the gyroscope
+        raw_list = self._read_bytes(_XGTYPE, 0x80 | _LSM9DS1_REGISTER_OUT_X_L_G, 6)
+        raw_x, raw_y, raw_z = struct.unpack_from('<hhh', bytes(raw_list))
+        return (raw_x, raw_y, raw_z)
+
+    @property
+    def gyro(self):
+        """The gyroscope X, Y, Z axis values as a 3-tuple of
+        degrees/second values.
+        """
+        raw = self.read_gyro_raw()
+        return list(map(lambda x: x * self._gyro_dps_digit, raw))
 
     def _write_byte(self, sensorType, register, data = []):
         raise NotImplementedError()
@@ -282,7 +300,7 @@ class LSM9DS1_I2C(LSM9DS1):
 bus = SMBus(1)
 
 sensor = LSM9DS1_I2C(bus)
-print(sensor.magnetic)
+print(sensor.gyro)
 
 
 bus.close()
