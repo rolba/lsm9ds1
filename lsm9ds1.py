@@ -261,7 +261,7 @@ class LSM9DS1():
         """
         raw = self.read_gyro_raw()
         return list(map(lambda x: x * self._gyro_dps_digit, raw))
-
+      
     def _write_byte(self, sensorType, register, data = []):
         raise NotImplementedError()
     
@@ -296,11 +296,4 @@ class LSM9DS1_I2C(LSM9DS1):
         else:
             return self._xg_device.read(register, count)
         
-        
-bus = SMBus(1)
-
-sensor = LSM9DS1_I2C(bus)
-print(sensor.gyro)
-
-
-bus.close()
+ 
