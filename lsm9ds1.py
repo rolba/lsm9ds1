@@ -212,8 +212,8 @@ class LSM9DS1():
         accelerometer property!
         """
         # Read the accelerometer
-        asdf = self._read_bytes(_XGTYPE, 0x80 | _LSM9DS1_REGISTER_OUT_X_L_XL, 6)
-        raw_x, raw_y, raw_z = struct.unpack_from('<hhh', bytes(asdf))
+        raw_list = self._read_bytes(_XGTYPE, 0x80 | _LSM9DS1_REGISTER_OUT_X_L_XL, 6)
+        raw_x, raw_y, raw_z = struct.unpack_from('<hhh', bytes(raw_list))
         return (raw_x, raw_y, raw_z)
 
     @property
@@ -231,9 +231,8 @@ class LSM9DS1():
         magnetometer property!
         """
         # Read the magnetometer
-        self._read_bytes(_MAGTYPE, 0x80 | _LSM9DS1_REGISTER_OUT_X_L_M, 6,
-                         self._BUFFER)
-        raw_x, raw_y, raw_z = struct.unpack_from('<hhh', self._BUFFER[0:6])
+        raw_list = self._read_bytes(_MAGTYPE, 0x80 | _LSM9DS1_REGISTER_OUT_X_L_M, 6)
+        raw_x, raw_y, raw_z = struct.unpack_from('<hhh', bytes(raw_list))
         return (raw_x, raw_y, raw_z)
 
     @property
@@ -242,7 +241,7 @@ class LSM9DS1():
         gauss values.
         """
         raw = self.read_mag_raw()
-        return map(lambda x: x * self._mag_mgauss_lsb / 1000.0, raw)
+        return list(map(lambda x: x * self._mag_mgauss_lsb / 1000.0, raw))
 
 
     def _write_byte(self, sensorType, register, data = []):
@@ -283,8 +282,7 @@ class LSM9DS1_I2C(LSM9DS1):
 bus = SMBus(1)
 
 sensor = LSM9DS1_I2C(bus)
-sensor.accel_range = ACCELRANGE_2G
-print(sensor.acceleration)
+print(sensor.magnetic)
 
 
 bus.close()
