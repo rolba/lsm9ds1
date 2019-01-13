@@ -224,6 +224,27 @@ class LSM9DS1():
         raw = self.read_accel_raw()
         return list(map(lambda x: x * self._accel_mg_lsb / 1000.0 * _SENSORS_GRAVITY_STANDARD, raw))
 
+    def read_mag_raw(self):
+        """Read the raw magnetometer sensor values and return it as a
+        3-tuple of X, Y, Z axis values that are 16-bit unsigned values.  If you
+        want the magnetometer in nice units you probably want to use the
+        magnetometer property!
+        """
+        # Read the magnetometer
+        self._read_bytes(_MAGTYPE, 0x80 | _LSM9DS1_REGISTER_OUT_X_L_M, 6,
+                         self._BUFFER)
+        raw_x, raw_y, raw_z = struct.unpack_from('<hhh', self._BUFFER[0:6])
+        return (raw_x, raw_y, raw_z)
+
+    @property
+    def magnetic(self):
+        """The magnetometer X, Y, Z axis values as a 3-tuple of
+        gauss values.
+        """
+        raw = self.read_mag_raw()
+        return map(lambda x: x * self._mag_mgauss_lsb / 1000.0, raw)
+
+
     def _write_byte(self, sensorType, register, data = []):
         raise NotImplementedError()
     
