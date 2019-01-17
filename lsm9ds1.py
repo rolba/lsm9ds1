@@ -1,7 +1,9 @@
 from smbus import SMBus
 import RPi.GPIO as GPIO
+import numpy as np
 import struct
 import time
+import csv
 
 # Internal ants and register values:
 # pylint: disable=bad-whitespace
@@ -121,9 +123,13 @@ class LSM9DS1():
         self._accel_mg_lsb = None
         self._mag_mgauss_lsb = None
         self._gyro_dps_digit = None
-        self.accel_range = ACCELRANGE_2G
+        self.accel_range = ACCELRANGE_4G
         self.mag_gain = MAGGAIN_4GAUSS
         self.gyro_scale = GYROSCALE_245DPS
+        
+        #Calibration Values
+        self.magCalibrationCenter = None
+        self.magCalibrationScale = None 
 
     @property
     def accel_range(self):
@@ -180,6 +186,31 @@ class LSM9DS1():
             self._mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_12GAUSS
         elif val == MAGGAIN_16GAUSS:
             self._mag_mgauss_lsb = _LSM9DS1_MAG_MGAUSS_16GAUSS
+    
+    def mag_calibrate(self, iterations = 100):
+        """The magnetometr calibration finction.
+        Corrects soft and hard iron errors.
+        http://www.camelsoftware.com/2016/03/13/imu-maths-calculate-orientation-pt3/
+        """
+        magTab = np.empty((0,3))
+ 
+        for index in range(0,iterations):
+            magTab = np.vstack((magTab, sensorInstance.magnetic))
+            time.sleep(0.05)
+            
+        minVals = np.empty((0,3)) 
+        maxVals = np.empty((0,3))    
+        minVals = magTab.min(axis=0)
+        maxVals = magTab.max(axis=0)
+        
+        self.magCalibrationCenter = (minVals+maxVals)/2
+        
+        vMin = minVals - ((minVals + maxVals)/2)
+        vMax = maxVals - ((minVals + maxVals)/2)
+        
+        avgs = (vMax - vMin)/2
+        avg = avgs.sum()/3
+        self.magCalibrationScale = avg/avgs
             
     @property
     def gyro_scale(self):
@@ -295,5 +326,49 @@ class LSM9DS1_I2C(LSM9DS1):
             return self._mag_device.read(register, count)
         else:
             return self._xg_device.read(register, count)
-        
+
+
+sensorBus = SMBus(1)
+sensorInstance = LSM9DS1_I2C(sensorBus)   
+magTab = np.empty((0,3))
  
+for index in range(0,100):
+    magTab = np.vstack((magTab, sensorInstance.magnetic))
+    time.sleep(0.05)
+    
+minVals = np.empty((0,3)) 
+maxVals = np.empty((0,3))    
+minVals = magTab.min(axis=0)
+maxVals = magTab.max(axis=0)
+
+vMin = minVals - ((minVals + maxVals)/2)
+vMax = maxVals - ((minVals + maxVals)/2)
+
+avgs = (vMax - vMin)/2
+avg = avgs.sum()/3
+avgScale = avg/avgs
+
+
+
+
+
+print(avgs, avg)
+
+
+
+
+# sensorBus = SMBus(1)
+# sensorInstance = LSM9DS1_I2C(sensorBus)
+# time.sleep(1)
+# with open('cal_na_stole_nieruchomo', 'w') as myfile:
+#     wr = csv.writer(myfile, delimiter=',', quoting=csv.QUOTE_NONNUMERIC)
+#     header = ["index", "gyro_x", "gyro_y", "gyro_z", "accel_x", "accel_y", "accel_z", "mag_x", "mag_y", "mag_z"]
+#     wr.writerow(header)
+#     for index in range(0, 10000):
+#         listSensors = [index]+sensorInstance.gyro# + sensorInstance.acceleration + sensorInstance.magnetic
+#         print (index, listSensors)
+#         
+#         wr.writerow(listSensors)
+#         time.sleep(0.01)
+
+
