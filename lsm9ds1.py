@@ -205,8 +205,8 @@ class LSM9DS1():
         
         self.magCalibrationCenter = (minVals+maxVals)/2
         
-        vMin = minVals - ((minVals + maxVals)/2)
-        vMax = maxVals - ((minVals + maxVals)/2)
+        vMin = minVals - self.magCalibrationCenter
+        vMax = maxVals - self.magCalibrationCenter
         
         avgs = (vMax - vMin)/2
         avg = avgs.sum()/3
@@ -270,9 +270,15 @@ class LSM9DS1():
     def magnetic(self):
         """The magnetometer X, Y, Z axis values as a 3-tuple of
         gauss values.
+        Mag calbration included.
         """
         raw = self.read_mag_raw()
-        return list(map(lambda x: x * self._mag_mgauss_lsb / 1000.0, raw))
+        magneticVal  = list(map(lambda x: x * self._mag_mgauss_lsb / 1000.0, raw))
+
+        if (self.magCalibrationCenter is not None) and (self.magCalibrationScale is not None):
+            magneticVal -= self.magCalibrationCenter
+            magneticVal *= self.magCalibrationScale
+        return magneticVal
 
     def read_gyro_raw(self):
         """Read the raw gyroscope sensor values and return it as a
@@ -326,49 +332,4 @@ class LSM9DS1_I2C(LSM9DS1):
             return self._mag_device.read(register, count)
         else:
             return self._xg_device.read(register, count)
-
-
-sensorBus = SMBus(1)
-sensorInstance = LSM9DS1_I2C(sensorBus)   
-magTab = np.empty((0,3))
- 
-for index in range(0,100):
-    magTab = np.vstack((magTab, sensorInstance.magnetic))
-    time.sleep(0.05)
-    
-minVals = np.empty((0,3)) 
-maxVals = np.empty((0,3))    
-minVals = magTab.min(axis=0)
-maxVals = magTab.max(axis=0)
-
-vMin = minVals - ((minVals + maxVals)/2)
-vMax = maxVals - ((minVals + maxVals)/2)
-
-avgs = (vMax - vMin)/2
-avg = avgs.sum()/3
-avgScale = avg/avgs
-
-
-
-
-
-print(avgs, avg)
-
-
-
-
-# sensorBus = SMBus(1)
-# sensorInstance = LSM9DS1_I2C(sensorBus)
-# time.sleep(1)
-# with open('cal_na_stole_nieruchomo', 'w') as myfile:
-#     wr = csv.writer(myfile, delimiter=',', quoting=csv.QUOTE_NONNUMERIC)
-#     header = ["index", "gyro_x", "gyro_y", "gyro_z", "accel_x", "accel_y", "accel_z", "mag_x", "mag_y", "mag_z"]
-#     wr.writerow(header)
-#     for index in range(0, 10000):
-#         listSensors = [index]+sensorInstance.gyro# + sensorInstance.acceleration + sensorInstance.magnetic
-#         print (index, listSensors)
-#         
-#         wr.writerow(listSensors)
-#         time.sleep(0.01)
-
 
